@@ -1,6 +1,6 @@
 {
   "name": "at-silver-form",
-  "version": "1.0.0.62",
+  "version": "1.0.0.84",
   "private": true,
   "dependencies": {
     "tangere": "TangereJs/tangere#master"

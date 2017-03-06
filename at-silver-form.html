@@ -26,6 +26,7 @@
 
     <at-core-spinner id="spinner" type="wave" display="none"></at-core-spinner>
     <at-carbon-alert id="invalidMessage">Please correct the marked fields with error(s) before submitting the form.</at-carbon-alert>
+    <at-carbon-alert id="successAlert" on-confirm="_successConfirmed"></at-carbon-alert>
     <at-core-activity id="SchemaActivity" url="{{schemaUrl}}" on-response="handleAjaxSchemaResponse" on-error="handleRequestError"></at-core-activity>
     <at-core-activity id="RecordActivity" on-response="handleAjaxRecordResponse" on-error="handleRequestError"></at-core-activity>
     <at-core-activity id="Activity" url="{{url}}" method="POST" on-response="handleAjaxPostResponse" on-error="handleRequestError"></at-core-activity>
@@ -62,6 +63,20 @@
         type: String,
         value: "",
         observer: 'recordIdChanged',
+        notify: true
+      },
+      successMessage: {
+        type: String,
+        value: ""
+      },
+      redirectUrl: {
+        type: String,
+        value: "#!at-now/start-now"
+      },
+      autoAppTitle: {
+        type: Boolean,
+        title: "Set item.title as app title",
+        value: false,
         notify: true
       },
       mode: {
@@ -122,7 +137,7 @@
       this.$.buttonWrapper.style.display = "none";
       this.$.Form.hide = true;
 
-      this.$.Form.schema = newValue;
+      this.$.Form.schema = newValue ? newValue : {};
     },
 
     recordIdChanged: function (newValue, oldValue) {
@@ -247,6 +262,11 @@
         this.schema = e.detail.Data.form.schema;
         this.url = e.detail.Data.form.url;
 
+        // set app title from item when enabled
+        if (this.autoAppTitle && this.schema.title) {
+          Polymer.signal("app-caption", this.schema.title);
+        }
+
         //If mode != create and recordId is provided we should fetch data, otherwise recordId is ignored
         if (this.mode != "c" && this.recordId) {
           if (this.url && this.recordId) {
@@ -301,10 +321,37 @@
       }
     },
 
+    _successConfirmed: function(e) {
+
+      // success confirmed. done. redirect
+      Polymer.signal("navigate-to", this.redirectUrl ? this.redirectUrl : "#!at-now/start-now");
+
+    },
+
     handleAjaxPostResponse: function (e) {
       this.fire("at-form-ajax-post-response", {
         value: e.detail
       });
+
+      // should we redirect when done?
+      if (this.redirectUrl) {
+
+        this.$.spinner.display = "none";
+        if (this._busy) {
+          Polymer.signal("busy-end");
+          this._busy = false;
+        }
+
+        if (this.successMessage) {
+          this.$.successAlert.message = this.successMessage;
+          this.$.successAlert.open();
+          return;
+        }
+
+        Polymer.signal("navigate-to", this.redirectUrl);
+        return;
+      }
+
       this.$.Form.disabled = false;
 
       if (e.detail.ErrorCode == 0) {

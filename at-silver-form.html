@@ -29,7 +29,7 @@
     <at-carbon-alert id="successAlert" on-confirm="_successConfirmed"></at-carbon-alert>
     <at-core-activity id="SchemaActivity" url="{{schemaUrl}}" on-response="handleAjaxSchemaResponse" on-error="handleRequestError"></at-core-activity>
     <at-core-activity id="RecordActivity" on-response="handleAjaxRecordResponse" on-error="handleRequestError"></at-core-activity>
-    <at-core-activity id="Activity" url="{{url}}" method="POST" on-response="handleAjaxPostResponse" on-error="handleRequestError"></at-core-activity>
+    <at-core-activity id="Activity" method="POST" on-response="handleAjaxPostResponse" on-error="handleRequestError"></at-core-activity>
     <at-core-form id="Form" on-rendered="handleFormRendered"></at-core-form>
 
     <div id="buttonWrapper" style="display:none">
@@ -53,11 +53,11 @@
       schemaUrl: {
         type: String,
         value: "",
-        observer: "schemaUrlChanged"
+        observer: "_schemaUrlChanged"
       },
       schema: {
         type: Object,
-        observer: "schemaChanged"
+        observer: "_schemaChanged"
       },
       recordId: {
         type: String,
@@ -94,11 +94,10 @@
           title: "Read",
           value: "r"
         }],
-        observer: "modeChanged",
+        observer: "_modeChanged",
         notify: true
       },
-      //Post Mode should be either json or formdata
-      //default value is json
+
       postMode: {
         type: String,
         value: "json",
@@ -117,7 +116,7 @@
       title: "Form",
       type: "element",
       xtype: "at-silver-form",
-      stateProperties: ["mode"],
+      stateProperties: ["mode","recordId","schemaUrl"],
       icon: "now:form"
     }],
 
@@ -129,7 +128,7 @@
     //when change of recordId and mode is caused by post data response
     _postResponseIdChange: false,
 
-    schemaChanged: function (newValue, oldValue) {
+    _schemaChanged: function (newValue, oldValue) {
       this.fire("at-form-ajax-schema-changed", {
         schema: newValue
       });
@@ -158,17 +157,19 @@
         this.mode = this.recordId ? "u" : "c";
       }
 
-      if (this.url && newValue) {
+      var url = this._url ? this._url : this.url;
+
+      if (url && newValue) {
 
         itemId = newValue;
-        if (!this.url.endsWith("/")) {
+        if (!url.endsWith("/")) {
           itemId = "/" + itemId;
         }
 
         this.$.buttonWrapper.style.display = "none";
         this.$.Form.hide = true;
 
-        this.$.RecordActivity.url = this.url + itemId;
+        this.$.RecordActivity.url = url + itemId;
         this.$.RecordActivity.generateRequest();
 
         this.$.spinner.display = "block";
@@ -179,7 +180,8 @@
       }
     },
 
-    schemaUrlChanged: function (newValue, oldValue) {
+    _schemaUrlChanged: function (newValue, oldValue) {
+
       if (!this._afterReady) {
         return;
       }
@@ -189,7 +191,8 @@
       }
     },
 
-    modeChanged: function (newValue, oldValue) {
+    _modeChanged: function (newValue, oldValue) {
+
       if (!this._afterReady) {
         return;
       }
@@ -259,23 +262,25 @@
         //This line here is required to reset form data
         this.$.Form._internalData = {};
 
-        this.schema = e.detail.Data.form.schema;
-        this.url = e.detail.Data.form.url;
+        // *workaround* bug in designer which saves changed this.schema, this.url value
+        this._schema = e.detail.Data.form.schema;
+        this._schemaChanged(this._schema);
+        this._url = e.detail.Data.form.url;
 
         // set app title from item when enabled
-        if (this.autoAppTitle && this.schema.title) {
-          Polymer.signal("app-caption", this.schema.title);
+        if (this.autoAppTitle && this._schema.title) {
+          Polymer.signal("app-caption", this._schema.title);
         }
 
         //If mode != create and recordId is provided we should fetch data, otherwise recordId is ignored
         if (this.mode != "c" && this.recordId) {
-          if (this.url && this.recordId) {
+          if (this._url && this.recordId) {
             console.log("Fetch form data for item with ID: " + this.recordId);
             var itemId = this.recordId;
-            if (!this.url.endsWith("/")) {
+            if (!this._url.endsWith("/")) {
               itemId = "/" + itemId;
             }
-            this.$.RecordActivity.url = this.url + itemId;
+            this.$.RecordActivity.url = this._url + itemId;
             this.$.RecordActivity.generateRequest();
 
             this.$.spinner.display = "block";
@@ -433,8 +438,11 @@
           json["id"] = this.recordId;
         }
 
-        for (var key in this.schema.properties) {
-          if (this.schema.properties.hasOwnProperty(key)) {
+        // if we have remote schema use that
+        var schema = this._schema ? this._schema : this.schema;
+
+        for (var key in schema.properties) {
+          if (schema.properties.hasOwnProperty(key)) {
 
             var files = this.$.Form.files[key];
             //If property is available then add files to the postData
@@ -459,13 +467,14 @@
           postData["id"] = this.recordId;
         }
 
-        for (var key in this.schema.properties) {
-          if (this.schema.properties.hasOwnProperty(key)) {
+        for (var key in schema.properties) {
+          if (schema.properties.hasOwnProperty(key)) {
             postData[key] = this.$.Form.data[key];
           }
         }
       }
-
+      var url = this._url ? this._url : this.url;
+      this.$.Activity.url = url;
       this.$.Activity.body = postData;
       this.$.Activity.generateRequest();
 
